@@ -23,7 +23,6 @@ const int CHARACTER_VERTICAL_SPACING = CHARACTER_TOP_VERTICAL_SPACING + CHARACTE
 
 const int HEADING_HEIGHT = CHARACTER_HEIGHT + CHARACTER_VERTICAL_SPACING;
 
-const int BYTE_CHARACTER_LENGTH = 3;
 const int SPACE_CHARACTER_LENGTH = 1;
 
 const int EEPROM_ADDRESS_START = 0;
@@ -43,8 +42,12 @@ enum ValueDisplayType
   ASCII
 };
 
+ValueDisplayType displayType;
+
 int EEPROMAddressLength;
 int EEPROMValueLength;
+
+int byteCharacterLength;
 
 int screenWidth;
 int screenHeight;
@@ -59,15 +62,15 @@ int cellIndent;
 int headingLength;
 int headingIndent;
 
-int currentPage = 0;
-int currentCell = 0;
+int currentPage;
+int currentCell;
 int currentAddress;
 
-int framesToShow = 0;
+int framesToShow;
 
-int framesInputHasTriggered = 0;
+int framesInputHasTriggered;
 
-boolean editingCell = false;
+boolean editingCell;
 int originalValue;
 int newValue;
 
@@ -77,14 +80,35 @@ void setup()
   arduboy.begin();
   arduboy.setFrameRate(FRAMES_PER_SECOND);
 
+  setupDisplayVariables();
+}
+
+void setupDisplayVariables()
+{
   screenWidth = arduboy.width();
   screenHeight = arduboy.height();
 
-  cellLength = (BYTE_CHARACTER_LENGTH+SPACE_CHARACTER_LENGTH)*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING);
-  cellRows = floor(1.0*screenWidth/cellLength);
-  cellColumns = floor(1.0*(screenHeight-HEADING_HEIGHT+CHARACTER_BOTTOM_VERTICAL_SPACING)/(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING));
+  displayType = EEPROM.read(VALUE_DISPLAY_TYPE_ADDRESS);
+  switch (displayType)
+  {
+    case INT:
+    default:
+    byteCharacterLength = String(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE).length();
+    break;
+
+    case HEXA:
+    byteCharacterLength = String(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE, HEX).length();
+    break;
+
+    case ASCII:
+    byteCharacterLength = 1; // Not super sure how to define this
+  }
+
+  cellLength = (byteCharacterLength+SPACE_CHARACTER_LENGTH)*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING);
+  cellColumns = floor(1.0*screenWidth/cellLength);
+  cellRows = floor(1.0*(screenHeight-HEADING_HEIGHT+CHARACTER_BOTTOM_VERTICAL_SPACING)/(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING));
   cellCount = cellRows*cellColumns;
-  cellIndent = ((screenWidth+CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)%cellLength)/2;
+  cellIndent = ((screenWidth)%cellLength+CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)/2;
   pageCount = ceil(1.0*(EEPROM_ADDRESS_END-EEPROM_ADDRESS_START)/cellCount);
 
   EEPROMAddressLength = String(EEPROM_ADDRESS_END-EEPROM_ADDRESS_START).length();
@@ -92,6 +116,13 @@ void setup()
 
   headingLength = (CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)*(EEPROMAddressLength+1+EEPROMAddressLength+1+EEPROMAddressLength+1+String(pageCount).length()+1+String(pageCount).length());
   headingIndent = (screenWidth+CHARACTER_HORIZONTAL_SPACING)%headingLength/2;
+
+  currentPage = currentAddress/cellCount;
+  currentCell = currentAddress%cellCount;
+
+  framesToShow = 0;
+  framesInputHasTriggered = 0;
+  editingCell = false;
 }
 
 void loop()
@@ -210,6 +241,10 @@ void loop()
     delayAfterInput(CELL_BUTTONS_DELAY_TIME);
   }
 
+  ValueDisplayType currentDisplayType = EEPROM.read(VALUE_DISPLAY_TYPE_ADDRESS);
+  if (currentDisplayType != displayType)
+    setupDisplayVariables();
+
   arduboy.setCursor(headingIndent,0);
   arduboy.print(applyZeroPadding(currentAddress, EEPROMAddressLength) + " ");
   arduboy.drawFastHLine(headingIndent, CHARACTER_HEIGHT, headingLength, 1);
@@ -219,13 +254,11 @@ void loop()
   else
     displayEditingHeading();
 
-  ValueDisplayType displayType = EEPROM.read(VALUE_DISPLAY_TYPE_ADDRESS);
-
   for (int i=0; i < cellRows; i++)
   {
     for (int j=0; j < cellColumns; j++)
     {
-      int absoluteCellNumber = currentPage*cellCount+(i*cellRows+j);
+      int absoluteCellNumber = currentPage*cellCount+(i*cellColumns+j);
       if (absoluteCellNumber > EEPROM_ADDRESS_END)
         continue;
       arduboy.setCursor(cellIndent+(j*cellLength), HEADING_HEIGHT+(i*(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING)));
@@ -245,29 +278,29 @@ void loop()
       {
         case INT:
         default:
-        valueToDisplay = applyZeroPadding(rawValue, EEPROMValueLength);
+        valueToDisplay = applyZeroPadding(rawValue, byteCharacterLength);
         break;
 
         case HEXA:
-        valueToDisplay = applyCharacterPadding(applyCharacterPadding(String(rawValue, HEX), String(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE, HEX).length(), "0"), EEPROMValueLength, " ");
+        valueToDisplay = applyCharacterPadding(String(rawValue, HEX), byteCharacterLength, "0");
         break;
 
         case ASCII:
-        valueToDisplay = applyCharacterPadding(String((char) rawValue), EEPROMValueLength, " ");
+        valueToDisplay = applyCharacterPadding(String((char) rawValue), byteCharacterLength, " ");
         break;
       }
       arduboy.print(valueToDisplay);
     }
   }
 
-  arduboy.drawFastHLine(cellIndent+(currentCell%cellColumns*cellLength), HEADING_HEIGHT+((currentCell/cellRows)*(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING))+CHARACTER_HEIGHT, BYTE_CHARACTER_LENGTH*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)-CHARACTER_HORIZONTAL_SPACING, WHITE);
+  arduboy.drawFastHLine(cellIndent+(currentCell%cellColumns*cellLength), HEADING_HEIGHT+((currentCell/cellColumns)*(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING))+CHARACTER_HEIGHT, byteCharacterLength*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)-CHARACTER_HORIZONTAL_SPACING, WHITE);
 
   arduboy.display();
 }
 
 void displayPageHeading()
 {
-  arduboy.print(applyZeroPadding(currentPage*cellCount, EEPROMAddressLength) + "-" + applyZeroPadding((currentPage+1)*cellCount-1, EEPROMAddressLength) + " ");
+  arduboy.print(applyZeroPadding(currentPage*cellCount, EEPROMAddressLength) + "-" + applyZeroPadding(min((currentPage+1)*cellCount-1, EEPROM_ADDRESS_END), EEPROMAddressLength) + " ");
   arduboy.print(applyZeroPadding(currentPage, String(pageCount-1).length()) + "/" + String(pageCount-1));
 }
 
