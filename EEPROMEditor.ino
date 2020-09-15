@@ -1,3 +1,24 @@
+/**
+
+EEPROM System Map
+(Addresses 0-15)
+
+0     -- "Reserved for bootloader use" (DO NOT EDIT)
+1     -- System flags
+        - Bits 1-4 are 1
+        - Bit 5 is 0
+        - Bit 6 toggles LEDs on logo screen
+        - Bit 7 toggles logo screen on boot
+        - Bit 8 toggles unit name on logo screen
+2     -- System audio toggle
+3-7   -- "Reserved for future use" (as of v5.3.0)
+8-9   -- 16-bit unit binary ID
+10-15 -- 6 character unit name
+        - Cannot contain 0x00, 0xFF, 0x0A, 0x0D
+        - Names with <6 characters are padded with 0x00
+
+**/
+
 #include <Arduboy2.h>
 #include <SPI.h>
 #include <EEPROM.h>
@@ -32,14 +53,18 @@ const int EEPROM_MIN_VALUE = 0;
 const int EEPROM_MAX_VALUE = 255;
 
 const int VALUE_DISPLAY_TYPE_ADDRESS = 1023;
+//const int CAN_EDIT_SYSTEM_DATA_ADDRESS = 1022; //TBA
+//const int SELECTED_ADDRESS_ADDRESS = 1021; //TBA
 
 const int EDITING_LED_BRIGHTNESS = 10;
+const int EDITING_LED_DELAY = 300;
 
 enum ValueDisplayType
 {
+  BINA,
   INT,
   HEXA,
-  ASCII
+  ASCII,
 };
 
 ValueDisplayType displayType;
@@ -61,6 +86,7 @@ int cellIndent;
 
 int headingLength;
 int headingIndent;
+boolean showPageNumbers;
 
 int currentPage;
 int currentCell;
@@ -80,6 +106,8 @@ void setup()
   arduboy.begin();
   arduboy.setFrameRate(FRAMES_PER_SECOND);
 
+  currentAddress = EEPROM_STORAGE_SPACE_START;
+
   setupDisplayVariables();
 }
 
@@ -91,6 +119,10 @@ void setupDisplayVariables()
   displayType = EEPROM.read(VALUE_DISPLAY_TYPE_ADDRESS);
   switch (displayType)
   {
+    case BINA:
+    byteCharacterLength = String(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE, BIN).length();
+    break;
+
     case INT:
     default:
     byteCharacterLength = String(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE).length();
@@ -101,7 +133,8 @@ void setupDisplayVariables()
     break;
 
     case ASCII:
-    byteCharacterLength = 1; // Not super sure how to define this
+    byteCharacterLength = String(char(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE)).length();
+    break;
   }
 
   cellLength = (byteCharacterLength+SPACE_CHARACTER_LENGTH)*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING);
@@ -114,7 +147,15 @@ void setupDisplayVariables()
   EEPROMAddressLength = String(EEPROM_ADDRESS_END-EEPROM_ADDRESS_START).length();
   EEPROMValueLength = String(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE).length();
 
-  headingLength = (CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)*(EEPROMAddressLength+1+EEPROMAddressLength+1+EEPROMAddressLength+1+String(pageCount).length()+1+String(pageCount).length());
+  headingLength = (CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)*(EEPROMAddressLength+1+EEPROMAddressLength+1+EEPROMAddressLength+1+String(pageCount).length()+1+String(pageCount).length())-CHARACTER_HORIZONTAL_SPACING;
+  if (headingLength > screenWidth+CHARACTER_HORIZONTAL_SPACING)
+  {
+    showPageNumbers = false;
+    headingLength -= (CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)*2*(1+String(pageCount).length());
+  }
+  else
+    showPageNumbers = true;
+
   headingIndent = (screenWidth+CHARACTER_HORIZONTAL_SPACING)%headingLength/2;
 
   currentPage = currentAddress/cellCount;
@@ -159,7 +200,7 @@ void loop()
       EEPROM.write(currentAddress, newValue);
 
       arduboy.setRGBled(0, EDITING_LED_BRIGHTNESS, 0);
-      delay(300);
+      delay(EDITING_LED_DELAY);
       arduboy.setRGBled(0, 0, 0);
 
       editingCell = false;
@@ -180,7 +221,7 @@ void loop()
     else
     {
       arduboy.setRGBled(EDITING_LED_BRIGHTNESS, 0, 0);
-      delay(300);
+      delay(EDITING_LED_DELAY);
       arduboy.setRGBled(0, 0, 0);
 
       editingCell = false;
@@ -197,9 +238,7 @@ void loop()
       delayAfterInput(CELL_SCROLL_BUTTONS_DELAY_TIME);
     }
     else
-    {
       newValue = EEPROM_MIN_VALUE;
-    }
   }
   else if (arduboy.pressed(RIGHT_BUTTON))
   {
@@ -211,9 +250,7 @@ void loop()
       delayAfterInput(CELL_SCROLL_BUTTONS_DELAY_TIME);
     }
     else
-    {
       newValue = EEPROM_MAX_VALUE;
-    }
   }
 
   if ((arduboy.buttonsState() & (UP_BUTTON | DOWN_BUTTON)) != 0 && !editingCell)
@@ -265,17 +302,17 @@ void loop()
 
       int rawValue;
       if (absoluteCellNumber != currentAddress || !editingCell)
-      {
         rawValue = EEPROM.read(absoluteCellNumber);
-      }
       else
-      {
         rawValue = newValue;
-      }
 
       String valueToDisplay;
       switch (displayType)
       {
+        case BINA:
+        valueToDisplay = applyCharacterPadding(String(rawValue, BIN), byteCharacterLength, "0");
+        break;
+
         case INT:
         default:
         valueToDisplay = applyZeroPadding(rawValue, byteCharacterLength);
@@ -300,8 +337,9 @@ void loop()
 
 void displayPageHeading()
 {
-  arduboy.print(applyZeroPadding(currentPage*cellCount, EEPROMAddressLength) + "-" + applyZeroPadding(min((currentPage+1)*cellCount-1, EEPROM_ADDRESS_END), EEPROMAddressLength) + " ");
-  arduboy.print(applyZeroPadding(currentPage, String(pageCount-1).length()) + "/" + String(pageCount-1));
+  arduboy.print(applyZeroPadding(currentPage*cellCount, EEPROMAddressLength) + "-" + applyZeroPadding(min((currentPage+1)*cellCount-1, EEPROM_ADDRESS_END), EEPROMAddressLength));
+  if (showPageNumbers)
+    arduboy.print(" " + applyZeroPadding(currentPage, String(pageCount-1).length()) + "/" + String(pageCount-1));
 }
 
 void displayEditingHeading()
@@ -318,9 +356,7 @@ String applyZeroPadding(int value, int spaces)
 String applyCharacterPadding(String value, int spaces, String character)
 {
   while (value.length() < spaces)
-  {
     value = character + value;
-  }
 
   return value;
 }
@@ -333,9 +369,7 @@ void checkForInvalidEEPROMSelection()
     currentCell = 0;
 
   while (currentPage*cellCount+currentCell > EEPROM_ADDRESS_END)
-  {
     currentCell--;
-  }
 }
 
 void delayAfterInput(int delayTime)
