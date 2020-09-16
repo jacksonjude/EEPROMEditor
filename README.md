@@ -19,5 +19,6 @@ An EEPROM storage viewer and editor for the Arduboy, with a generic structure th
   * The value of the cell defined in the constant VALUE_DISPLAY_TYPE_ADDRESS (by default 1023) will determine the display type
   * Binary (0), Integer (1, Default), Hexadecimal (2), and ASCII (3) are the current modes<br>
   ![](screenshots/Bin-Display.png?raw=true)
+  ![](screenshots/Int-Display.png?raw=true)
   ![](screenshots/Hex-Display.png?raw=true)
   ![](screenshots/ASCII-Display.png?raw=true)
