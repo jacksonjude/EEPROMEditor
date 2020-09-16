@@ -301,6 +301,8 @@ void loop()
     delayAfterInput(CELL_SCROLL_BUTTONS_DELAY_TIME);
   }
 
+  boolean shouldChangeValue = true;
+
   if ((arduboy.buttonsState() & (UP_BUTTON | DOWN_BUTTON)) != 0 && !editingCell)
   {
     editingCell = true;
@@ -308,32 +310,42 @@ void loop()
 
     originalValue = EEPROM.read(currentAddress);
     newValue = originalValue;
+
+    if (displayType == BINA)
+    {
+      while (arduboy.buttonsState()) {}
+      shouldChangeValue = false;
+    }
   }
 
-  if ((arduboy.pressed(UP_BUTTON) || arduboy.pressed(DOWN_BUTTON)) && displayType == BINA && currentBit != 0)
+  if (shouldChangeValue)
   {
-    int bitValue = bitRead(newValue, BIN_BYTE_LENGTH-currentBit);
-    bitValue = (bitValue == 0) ? 1 : 0;
-    bitWrite(newValue, BIN_BYTE_LENGTH-currentBit, bitValue);
+    if ((arduboy.pressed(UP_BUTTON) || arduboy.pressed(DOWN_BUTTON)) && displayType == BINA && currentBit != 0)
+    {
+      int bitValue = bitRead(newValue, BIN_BYTE_LENGTH-currentBit);
+      bitValue = (bitValue == 0) ? 1 : 0;
+      bitWrite(newValue, BIN_BYTE_LENGTH-currentBit, bitValue);
 
-    delayAfterInput(CELL_BUTTONS_DELAY_TIME);
-  }
-  else if (arduboy.pressed(UP_BUTTON))
-  {
-    newValue++;
-    if (newValue > EEPROM_MAX_VALUE)
-      newValue = EEPROM_MIN_VALUE;
+      delayAfterInput(CELL_BUTTONS_DELAY_TIME);
+    }
+    else if (arduboy.pressed(UP_BUTTON))
+    {
+      newValue++;
+      if (newValue > EEPROM_MAX_VALUE)
+        newValue = EEPROM_MIN_VALUE;
 
-    delayAfterInput(CELL_BUTTONS_DELAY_TIME);
-  }
-  else if (arduboy.pressed(DOWN_BUTTON))
-  {
-    newValue--;
-    if (newValue < EEPROM_MIN_VALUE)
-      newValue = EEPROM_MAX_VALUE;
+      delayAfterInput(CELL_BUTTONS_DELAY_TIME);
+    }
+    else if (arduboy.pressed(DOWN_BUTTON))
+    {
+      newValue--;
+      if (newValue < EEPROM_MIN_VALUE)
+        newValue = EEPROM_MAX_VALUE;
 
-    delayAfterInput(CELL_BUTTONS_DELAY_TIME);
+      delayAfterInput(CELL_BUTTONS_DELAY_TIME);
+    }
   }
+
 
   ValueDisplayType currentDisplayType = EEPROM.read(VALUE_DISPLAY_TYPE_ADDRESS);
   if (currentDisplayType != displayType)
@@ -388,10 +400,18 @@ void loop()
   }
 
   if (displayType != BINA || currentBit == 0)
-    arduboy.drawFastHLine(cellIndent+(currentCell%cellColumns*cellLength), HEADING_HEIGHT+((currentCell/cellColumns)*(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING))+CHARACTER_HEIGHT, byteCharacterLength*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)-CHARACTER_HORIZONTAL_SPACING, WHITE);
+  {
+    arduboy.drawFastHLine(cellIndent+(currentCell%cellColumns*cellLength)+(editingCell ? -2 : 0), HEADING_HEIGHT+((currentCell/cellColumns)*(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING))+CHARACTER_HEIGHT, byteCharacterLength*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)-CHARACTER_HORIZONTAL_SPACING+(editingCell ? 2*2 : 0), WHITE);
+    if (editingCell)
+    {
+      arduboy.drawPixel(cellIndent+(currentCell%cellColumns*cellLength)-2, HEADING_HEIGHT+((currentCell/cellColumns)*(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING))+CHARACTER_HEIGHT-1, WHITE);
+      arduboy.drawPixel(cellIndent+(currentCell%cellColumns*cellLength)+byteCharacterLength*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)-CHARACTER_HORIZONTAL_SPACING+1/* Not sure why +1 not +2. Need to do some math for variable substitution */, HEADING_HEIGHT+((currentCell/cellColumns)*(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING))+CHARACTER_HEIGHT-1, WHITE);
+    }
+  }
   else
     arduboy.drawFastHLine(cellIndent+(currentCell%cellColumns*cellLength)+(currentBit-1)*(CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING), HEADING_HEIGHT+((currentCell/cellColumns)*(CHARACTER_HEIGHT+CHARACTER_VERTICAL_SPACING))+CHARACTER_HEIGHT, CHARACTER_LENGTH, WHITE);
 
+  //Serial.write(arduboy.getBuffer(), 128 * 64 / 8); // To mirror display via Chrome app
   arduboy.display();
 }
 
