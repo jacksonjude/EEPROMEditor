@@ -14,6 +14,7 @@ An EEPROM storage viewer and editor for the Arduboy, with a generic structure th
   * The (LEFT) and (RIGHT) buttons in this mode will set the cell to the minimum or maximum value as defined in the EEPROM_MIN_VALUE and EEPROM_MAX_VALUE constants
     * The binary display mode allows for bit selection using (LEFT) and (RIGHT)<br>
     ![](screenshots/Bin-Edit.png?raw=true)
+    * The hexadecimal display mode will decrement / increment the value by 16 using (LEFT) and (RIGHT)
   * The (A) and (B) buttons in this mode will confirm or cancel the edit, accompanied by a green or red flash respectively
 * Different data display modes
   * The value of the cell defined in the constant VALUE_DISPLAY_TYPE_ADDRESS (by default 1023) will determine the display type
