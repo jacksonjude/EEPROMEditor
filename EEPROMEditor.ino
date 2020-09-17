@@ -57,6 +57,8 @@ const int HEX_BYTE_LENGTH = String(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE, HEX).lengt
 const int INT_BYTE_LENGTH = String(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE).length();
 const int ASCII_BYTE_LENGTH = String(char(EEPROM_MAX_VALUE-EEPROM_MIN_VALUE)).length();
 
+const int HEX_INCREMENT_AMOUNT = 16;
+
 const int VALUE_DISPLAY_TYPE_ADDRESS = 1023;
 //const int CAN_EDIT_SYSTEM_DATA_ADDRESS = 1022; //TBA
 //const int SELECTED_ADDRESS_ADDRESS = 1021; //TBA
@@ -184,7 +186,7 @@ void calculateHeadingLength()
   }
 
   headingLength = (CHARACTER_LENGTH+CHARACTER_HORIZONTAL_SPACING)*headingCharacterCount-CHARACTER_HORIZONTAL_SPACING;
-  headingIndent = (screenWidth+CHARACTER_HORIZONTAL_SPACING)%headingLength/2;
+  headingIndent = screenWidth%headingLength/2;
 }
 
 void loop()
@@ -276,6 +278,12 @@ void loop()
       if (currentBit < 0)
         currentBit = BIN_BYTE_LENGTH;
     }
+    else if (displayType == HEXA)
+    {
+      newValue -= HEX_INCREMENT_AMOUNT;
+      if (newValue < EEPROM_MIN_VALUE)
+        newValue += EEPROM_MAX_VALUE-EEPROM_MIN_VALUE+1;
+    }
     else
       newValue = EEPROM_MIN_VALUE;
 
@@ -295,6 +303,12 @@ void loop()
       if (currentBit > BIN_BYTE_LENGTH)
         currentBit = 0;
     }
+    else if (displayType == HEXA)
+    {
+      newValue += HEX_INCREMENT_AMOUNT;
+      if (newValue > EEPROM_MAX_VALUE)
+        newValue -= EEPROM_MAX_VALUE-EEPROM_MIN_VALUE+1;
+    }
     else
       newValue = EEPROM_MAX_VALUE;
 
@@ -311,7 +325,7 @@ void loop()
     originalValue = EEPROM.read(currentAddress);
     newValue = originalValue;
 
-    if (displayType == BINA)
+    if (displayType == HEXA || displayType == BINA)
     {
       while (arduboy.buttonsState()) {}
       shouldChangeValue = false;
